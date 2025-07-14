@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Cup Quest - Portrait</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background: #000;
+        width: 100%;
+        height: 100%;
+      }
+      #game-container {
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@farcade/game-sdk@latest/dist/index.min.js"></script>
+  </head>
+  <body>
+    <div id="game-container"></div>
+    <script>
+      let userScore = 0;
+      let level = 1;
+      let lives = 3; // Replaced goal with lives
+      let correctCup = 0;
+      let game;
+      let gameStarted = false;
+      let scoreText;
+      let levelText;
+      let livesText; // New text for lives
+      let correctSound;
+      let wrongSound;
+      let consecutiveCorrect = 0;
+
+      const originalPositions = [
+        { x: 130, y: 950 },
+        { x: 360, y: 850 },
+        { x: 590, y: 950 },
+      ];
+
+      window.FarcadeSDK.on("play_again", () => {
+        userScore = 0;
+        level = 1;
+        lives = 3; // Reset lives
+        consecutiveCorrect = 0;
+        gameStarted = false;
+        startGame();
+      });
+
+      document.addEventListener("DOMContentLoaded", function () {
+        try {
+          game = new Phaser.Game({
+            type: Phaser.AUTO,
+            backgroundColor: "#000000",
+            parent: "game-container",
+            scale: {
+              mode: Phaser.Scale.FIT,
+              autoCenter: Phaser.Scale.CENTER_BOTH,
+              width: 720,
+              height: 1280
+            },
+            scene: {
+              preload: preload,
+              create: create,
+            },
+            audio: {
+              disableWebAudio: false
+            }
+          });
+
+          window.FarcadeSDK.singlePlayer.actions.ready();
+        } catch (error) {
+          console.error("Game initialization error:", error);
+        }
+      });
+
+      function preload() {
+        this.load.image("cup", "https://lqy3lriiybxcejon.public.blob.vercel-storage.com/dbf2dd35-4db9-4fa3-8f3d-b4e86278c452/cup-JEvvu3BTUWTda46tgYMLjVJR8eGw2r.png?1UnY");
+        this.load.image("ball", "https://lqy3lriiybxcejon.public.blob.vercel-storage.com/dbf2dd35-4db9-4fa3-8f3d-b4e86278c452/ball-nT7q3vfn8P5ZOvVH1BAbE4m1yuQEIN.png?TNxf");
+        this.load.image("background", "https://lqy3lriiybxcejon.public.blob.vercel-storage.com/dbf2dd35-4db9-4fa3-8f3d-b4e86278c452/background-lJY1hnzTQmMUzLfzfTnE5DOpedajSq.png?3qti");
+        this.load.image("button", "https://lqy3lriiybxcejon.public.blob.vercel-storage.com/dbf2dd35-4db9-4fa3-8f3d-b4e86278c452/button-5oaxtaikhdasiMzJd2daoaOrHGK6vF.png?wzJQ");
+        this.load.audio("correct", "https://lqy3lriiybxcejon.public.blob.vercel-storage.com/dbf2dd35-4db9-4fa3-8f3d-b4e86278c452/correct-eN6CHCieXF7hGhAVkPYKzcMmel2ZLt.mp3?zTEu");
+        this.load.audio("wrong", "https://lqy3lriiybxcejon.public.blob.vercel-storage.com/dbf2dd35-4db9-4fa3-8f3d-b4e86278c452/wrong-Sn6JVA5pLN2pGSwJjAK0e6we1FqB1G.mp3?MGxI");
+      }
+
+      function create() {
+        const centerX = 360;
+        const centerY = 640;
+
+        this.add.image(centerX, centerY, "background").setOrigin(0.5).setDisplaySize(720, 1280);
+
+        levelText = this.add.text(20, 20, "LEVEL: " + level, {
+          fontSize: "28px",
+          fontFamily: "Arial",
+          color: "#ffffff",
+          stroke: "#000000",
+          strokeThickness: 4,
+        }).setDepth(10);
+
+        scoreText = this.add.text(20, 60, "SCORE: " + userScore, {
+          fontSize: "28px",
+          fontFamily: "Arial",
+          color: "#ffffff",
+          stroke: "#000000",
+          strokeThickness: 4,
+        }).setDepth(10);
+
+        livesText = this.add.text(20, 100, "LIVES: " + lives, {
+          fontSize: "28px",
+          fontFamily: "Arial",
+          color: "#ffffff",
+          stroke: "#000000",
+          strokeThickness: 4,
+        }).setDepth(10);
+
+        correctSound = this.sound.add("correct", { volume: 0.5 });
+        wrongSound = this.sound.add("wrong", { volume: 0.5 });
+
+        this.cups = originalPositions.map((pos, index) =>
+          this.add.image(pos.x, pos.y, "cup")
+            .setInteractive({ useHandCursor: true })
+            .setScale(0.7)
+            .setDepth(1 + index)
+            .setData('index', index) // Store index for reliable identification
+        );
+
+        if (!gameStarted) {
+          const startButton = this.add.image(centerX, 600, "button").setInteractive({ useHandCursor: true }).setScale(0.7).setDepth(10);
+          startButton.on("pointerdown", () => {
+            gameStarted = true;
+            startButton.setVisible(false);
+            showBallBeforeShuffle(this);
+            window.FarcadeSDK.singlePlayer.actions.hapticFeedback();
+          });
+          startButton.on("pointerover", () => startButton.setScale(1.5));
+          startButton.on("pointerout", () => startButton.setScale(0.7));
+        }
+
+        this.cups.forEach((cup) => {
+          cup.on("pointerdown", () => checkCup(cup.getData('index'), this));
+        });
+      }
+
+      function showBallBeforeShuffle(scene) {
+        correctCup = Phaser.Math.Between(0, 2);
+        const selectedCup = scene.cups[correctCup];
+
+        scene.tweens.add({
+          targets: selectedCup,
+          y: selectedCup.y - 120,
+          duration: 500,
+          ease: "Back.easeOut",
+          onComplete: () => {
+            const ball = scene.add.image(selectedCup.x, selectedCup.y + 180, "ball").setScale(0.1).setDepth(selectedCup.depth + 1);
+            scene.tweens.add({
+              targets: selectedCup,
+              y: selectedCup.y + 80,
+              duration: 500,
+              ease: "Back.easeIn",
+              delay: 500,
+              onComplete: () => {
+                ball.destroy();
+                shuffleCups(scene);
+              }
+            });
+          }
+        });
+      }
+
+      function shuffleCups(scene) {
+        const positions = [...originalPositions];
+        const indices = [0, 1, 2];
+
+        for (let i = indices.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [indices[i], indices[j]] = [indices[j], indices[i]];
+        }
+
+        const newCorrectCup = indices[correctCup];
+        correctCup = newCorrectCup;
+
+        let i = 0;
+        const baseDuration = 400;
+        const duration = baseDuration / (1 + (level - 1) * 0.3);
+
+        function doSwap() {
+          if (i >= 3) {
+            scene.cups.forEach((cup, index) => {
+              cup.setPosition(positions[index].x, positions[index].y);
+              cup.setDepth(1 + index);
+              cup.setInteractive({ useHandCursor: true });
+              cup.setTexture("cup");
+              cup.setData('index', index); // Update index after shuffle
+            });
+            return;
+          }
+
+          const indexA = indices[i];
+          const indexB = indices[(i + 1) % 3];
+          const cupA = scene.cups[indexA];
+          const cupB = scene.cups[indexB];
+
+          cupA.setDepth(2 + i);
+          cupB.setDepth(3 + i);
+
+          scene.tweens.add({
+            targets: cupA,
+            x: positions[indexB].x,
+            y: positions[indexB].y,
+            duration: duration,
+            ease: 'Sine.easeInOut'
+          });
+          scene.tweens.add({
+            targets: cupB,
+            x: positions[indexA].x,
+            y: positions[indexA].y,
+            duration: duration,
+            ease: 'Sine.easeInOut',
+            onComplete: () => {
+              [scene.cups[indexA], scene.cups[indexB]] = [scene.cups[indexB], scene.cups[indexA]];
+              [indices[indexA], indices[indexB]] = [indices[indexB], indices[indexA]];
+              scene.cups[indexA].setData('index', indexA);
+              scene.cups[indexB].setData('index', indexB);
+              i++;
+              doSwap();
+            }
+          });
+        }
+
+        scene.cups.forEach(cup => cup.disableInteractive());
+        doSwap();
+      }
+
+      function checkCup(index, scene) {
+        window.FarcadeSDK.singlePlayer.actions.hapticFeedback();
+        scene.cups.forEach(cup => cup.disableInteractive());
+
+        const selectedCup = scene.cups[index];
+        const originalY = selectedCup.y;
+
+        scene.tweens.add({
+          targets: selectedCup,
+          y: selectedCup.y - 120,
+          duration: 200,
+          ease: "Back.easeOut",
+          onComplete: () => {
+            let ball = null;
+            if (index === correctCup) {
+              ball = scene.add.image(selectedCup.x, selectedCup.y + 180, "ball").setScale(0.1).setDepth(selectedCup.depth + 1);
+              consecutiveCorrect++;
+              let points = 0;
+              if (consecutiveCorrect === 1) points = 10;
+              else if (consecutiveCorrect === 2) points = 30;
+              else if (consecutiveCorrect >= 3) points = 50;
+              userScore += points;
+              correctSound.play();
+            } else {
+              lives--; // Decrease lives on wrong choice
+              consecutiveCorrect = 0;
+              wrongSound.play();
+            }
+
+            scene.tweens.add({
+              targets: selectedCup,
+              y: originalY,
+              duration: 200,
+              ease: "Back.easeIn",
+              delay: 500,
+              onComplete: () => {
+                if (ball) ball.destroy();
+                selectedCup.setTexture("cup");
+                levelText.setText("LEVEL: " + level);
+                scoreText.setText("SCORE: " + userScore);
+                livesText.setText("LIVES: " + lives);
+
+                if (index === correctCup && consecutiveCorrect >= 3) {
+                  level++;
+                  userScore = 0;
+                  lives = 3; // Reset lives on level up
+                  consecutiveCorrect = 0;
+                  startGame();
+                } else if (lives <= 0) {
+                  window.FarcadeSDK.singlePlayer.actions.gameOver({ score: userScore });
+                } else {
+                  showBallBeforeShuffle(scene);
+                }
+              }
+            });
+          }
+        });
+      }
+
+      function startGame() {
+        const scene = game.scene.scenes[0];
+        scene.scene.restart();
+        levelText.setText("LEVEL: " + level);
+        scoreText.setText("SCORE: " + userScore);
+        livesText.setText("LIVES: " + lives);
+        consecutiveCorrect = 0;
+      }
+    </script>
+  </body>
+</html>
