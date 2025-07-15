@@ -34,9 +34,11 @@
       let scoreText;
       let levelText;
       let livesText;
+      let timerText;
       let correctSound;
       let wrongSound;
       let consecutiveCorrect = 0;
+      let timerEvent = null;
 
       const originalPositions = [
         { x: 130, y: 950 },
@@ -153,6 +155,16 @@
           })
           .setDepth(10);
 
+        timerText = this.add
+          .text(20, 140, "TIME: 30", {
+            fontSize: "28px",
+            fontFamily: "Arial",
+            color: "#ffffff",
+            stroke: "#000000",
+            strokeThickness: 4,
+          })
+          .setDepth(10);
+
         correctSound = this.sound.add("correct", { volume: 0.5 });
         wrongSound = this.sound.add("wrong", { volume: 0.5 });
 
@@ -179,10 +191,24 @@
           });
           startButton.on("pointerover", () => startButton.setScale(1.5));
           startButton.on("pointerout", () => startButton.setScale(0.7));
+        } else {
+          showBallBeforeShuffle(this);
         }
 
         this.cups.forEach((cup) => {
           cup.on("pointerdown", () => checkCup(cup.getData("index"), this));
+        });
+
+        this.time.addEvent({
+          delay: 1000,
+          callback: () => {
+            if (timerEvent) {
+              const remaining = Math.ceil((timerEvent.delay - timerEvent.getElapsed()) / 1000);
+              timerText.setText("TIME: " + remaining);
+            }
+          },
+          callbackScope: this,
+          loop: true,
         });
       }
 
@@ -227,7 +253,7 @@
 
         let i = 0;
         const baseDuration = 400;
-        const duration = baseDuration / (1 + (level - 1) * 0.3);
+        const duration = baseDuration / (1 + (level - 1) * 0.5);
 
         function doSwap() {
           if (i >= 3) {
@@ -237,6 +263,19 @@
               cup.setInteractive({ useHandCursor: true });
               cup.setTexture("cup");
               cup.setData("index", index);
+            });
+            timerEvent = scene.time.addEvent({
+              delay: 30000,
+              callback: () => {
+                lives--;
+                livesText.setText("LIVES: " + lives);
+                if (lives <= 0) {
+                  window.FarcadeSDK.singlePlayer.actions.gameOver({ score: userScore });
+                } else {
+                  showBallBeforeShuffle(scene);
+                }
+              },
+              callbackScope: scene,
             });
             return;
           }
@@ -280,6 +319,12 @@
       function checkCup(index, scene) {
         window.FarcadeSDK.singlePlayer.actions.hapticFeedback();
         scene.cups.forEach((cup) => cup.disableInteractive());
+
+        if (timerEvent) {
+          timerEvent.remove();
+          timerEvent = null;
+          timerText.setText("TIME: 30");
+        }
 
         const selectedCup = scene.cups[index];
         const originalY = selectedCup.y;
@@ -326,7 +371,7 @@
                   level++;
                   lives = 3;
                   consecutiveCorrect = 0;
-                  startGame();
+                  showBallBeforeShuffle(scene);
                 } else if (lives <= 0) {
                   window.FarcadeSDK.singlePlayer.actions.gameOver({ score: userScore });
                 } else {
@@ -340,11 +385,16 @@
 
       function startGame() {
         const scene = game.scene.scenes[0];
-        scene.scene.restart();
+        if (timerEvent) {
+          timerEvent.remove();
+          timerEvent = null;
+          timerText.setText("TIME: 30");
+        }
         levelText.setText("LEVEL: " + level);
         scoreText.setText("SCORE: " + userScore);
         livesText.setText("LIVES: " + lives);
         consecutiveCorrect = 0;
+        showBallBeforeShuffle(scene);
       }
     </script>
   </body>
