@@ -26,13 +26,13 @@
     <script>
       let userScore = 0;
       let level = 1;
-      let lives = 3; // Replaced goal with lives
-      let correctCup = 0;
+      let lives = 3;
+      let correctCupObject = null; // Track the correct cup object
       let game;
       let gameStarted = false;
       let scoreText;
       let levelText;
-      let livesText; // New text for lives
+      let livesText;
       let correctSound;
       let wrongSound;
       let consecutiveCorrect = 0;
@@ -46,7 +46,7 @@
       window.FarcadeSDK.on("play_again", () => {
         userScore = 0;
         level = 1;
-        lives = 3; // Reset lives
+        lives = 3;
         consecutiveCorrect = 0;
         gameStarted = false;
         startGame();
@@ -82,7 +82,7 @@
       function preload() {
         this.load.image("cup", "https://lqy3lriiybxcejon.public.blob.vercel-storage.com/dbf2dd35-4db9-4fa3-8f3d-b4e86278c452/cup-JEvvu3BTUWTda46tgYMLjVJR8eGw2r.png?1UnY");
         this.load.image("ball", "https://lqy3lriiybxcejon.public.blob.vercel-storage.com/dbf2dd35-4db9-4fa3-8f3d-b4e86278c452/ball-nT7q3vfn8P5ZOvVH1BAbE4m1yuQEIN.png?TNxf");
-        this.load.image("background", "https://lqy3lriiybxcejon.public.blob.vercel-storage.com/dbf2dd35-4db9-4fa3-8f3d-b4e86278c452/background-lJY1hnzTQmMUzLfzfTnE5DOpedajSq.png?3qti");
+        this.load.image("background", "https://lqy3lriiybxcejon.public.blob.vercel-storage.com/dbf2dd35-4db9-4fa3-8f3d-b4e86278c452/background1-eGkySxthi0cYn5dbFPTdGhkUWcseU6.png?PPah");
         this.load.image("button", "https://lqy3lriiybxcejon.public.blob.vercel-storage.com/dbf2dd35-4db9-4fa3-8f3d-b4e86278c452/button-5oaxtaikhdasiMzJd2daoaOrHGK6vF.png?wzJQ");
         this.load.audio("correct", "https://lqy3lriiybxcejon.public.blob.vercel-storage.com/dbf2dd35-4db9-4fa3-8f3d-b4e86278c452/correct-eN6CHCieXF7hGhAVkPYKzcMmel2ZLt.mp3?zTEu");
         this.load.audio("wrong", "https://lqy3lriiybxcejon.public.blob.vercel-storage.com/dbf2dd35-4db9-4fa3-8f3d-b4e86278c452/wrong-Sn6JVA5pLN2pGSwJjAK0e6we1FqB1G.mp3?MGxI");
@@ -94,7 +94,7 @@
 
         this.add.image(centerX, centerY, "background").setOrigin(0.5).setDisplaySize(720, 1280);
 
-        levelText = this.add.text(20, 20, "LEVEL: " + level, {
+        levelText = this.add.text(20,20, "LEVEL: " + level, {
           fontSize: "28px",
           fontFamily: "Arial",
           color: "#ffffff",
@@ -126,7 +126,7 @@
             .setInteractive({ useHandCursor: true })
             .setScale(0.7)
             .setDepth(1 + index)
-            .setData('index', index) // Store index for reliable identification
+            .setData('index', index)
         );
 
         if (!gameStarted) {
@@ -147,8 +147,9 @@
       }
 
       function showBallBeforeShuffle(scene) {
-        correctCup = Phaser.Math.Between(0, 2);
-        const selectedCup = scene.cups[correctCup];
+        const correctCupIndex = Phaser.Math.Between(0, 2);
+        correctCupObject = scene.cups[correctCupIndex];
+        const selectedCup = correctCupObject;
 
         scene.tweens.add({
           targets: selectedCup,
@@ -181,9 +182,6 @@
           [indices[i], indices[j]] = [indices[j], indices[i]];
         }
 
-        const newCorrectCup = indices[correctCup];
-        correctCup = newCorrectCup;
-
         let i = 0;
         const baseDuration = 400;
         const duration = baseDuration / (1 + (level - 1) * 0.3);
@@ -195,7 +193,7 @@
               cup.setDepth(1 + index);
               cup.setInteractive({ useHandCursor: true });
               cup.setTexture("cup");
-              cup.setData('index', index); // Update index after shuffle
+              cup.setData('index', index);
             });
             return;
           }
@@ -250,7 +248,7 @@
           ease: "Back.easeOut",
           onComplete: () => {
             let ball = null;
-            if (index === correctCup) {
+            if (selectedCup === correctCupObject) {
               ball = scene.add.image(selectedCup.x, selectedCup.y + 180, "ball").setScale(0.1).setDepth(selectedCup.depth + 1);
               consecutiveCorrect++;
               let points = 0;
@@ -260,7 +258,7 @@
               userScore += points;
               correctSound.play();
             } else {
-              lives--; // Decrease lives on wrong choice
+              lives--;
               consecutiveCorrect = 0;
               wrongSound.play();
             }
@@ -278,10 +276,10 @@
                 scoreText.setText("SCORE: " + userScore);
                 livesText.setText("LIVES: " + lives);
 
-                if (index === correctCup && consecutiveCorrect >= 3) {
+                if (selectedCup === correctCupObject && consecutiveCorrect >= 3) {
                   level++;
                   userScore = 0;
-                  lives = 3; // Reset lives on level up
+                  lives = 3;
                   consecutiveCorrect = 0;
                   startGame();
                 } else if (lives <= 0) {
@@ -297,7 +295,7 @@
 
       function startGame() {
         const scene = game.scene.scenes[0];
-        scene.scene.restart();
+        TorqueScriptscene.scene.restart();
         levelText.setText("LEVEL: " + level);
         scoreText.setText("SCORE: " + userScore);
         livesText.setText("LIVES: " + lives);
