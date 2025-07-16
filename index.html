@@ -27,18 +27,20 @@
     <script>
       let userScore = 0;
       let level = 1;
-      let lives = 3;
-      let correctCupObject = null; // Track the correct cup object
+      let lives = 1;
+      let correctCupObject = null;
       let game;
       let gameStarted = false;
       let scoreText;
       let levelText;
-      let livesText;
       let timerText;
       let correctSound;
       let wrongSound;
+      let tickSound;
+      let backgroundMusic;
       let consecutiveCorrect = 0;
       let timerEvent = null;
+      let timerUpdateEvent = null;
 
       const originalPositions = [
         { x: 130, y: 950 },
@@ -49,7 +51,7 @@
       window.FarcadeSDK.on("play_again", () => {
         userScore = 0;
         level = 1;
-        lives = 3;
+        lives = 1;
         consecutiveCorrect = 0;
         gameStarted = false;
         startGame();
@@ -59,9 +61,13 @@
         if (data.isMuted) {
           correctSound.setMute(true);
           wrongSound.setMute(true);
+          tickSound.setMute(true);
+          backgroundMusic.setMute(true);
         } else {
           correctSound.setMute(false);
           wrongSound.setMute(false);
+          tickSound.setMute(false);
+          backgroundMusic.setMute(false);
         }
       });
 
@@ -117,6 +123,14 @@
           "wrong",
           "https://lqy3lriiybxcejon.public.blob.vercel-storage.com/dbf2dd35-4db9-4fa3-8f3d-b4e86278c452/wrong-Sn6JVA5pLN2pGSwJjAK0e6we1FqB1G.mp3?MGxI",
         );
+        this.load.audio(
+          "tick",
+          "https://lqy3lriiybxcejon.public.blob.vercel-storage.com/dbf2dd35-4db9-4fa3-8f3d-b4e86278c452/ticktok-1xZvAw9W1tVZNkFJga1bbgUcddNdtE.mp3?GtPY",
+        );
+        this.load.audio(
+          "bgm",
+          "https://lqy3lriiybxcejon.public.blob.vercel-storage.com/dbf2dd35-4db9-4fa3-8f3d-b4e86278c452/background%20music-UcjVKuYKJQcy9KEuJonK3grVPNiPE4.mp3?m574",
+        );
       }
 
       function create() {
@@ -145,28 +159,24 @@
           })
           .setDepth(10);
 
-        livesText = this.add
-          .text(20, 100, "LIVES: " + lives, {
-            fontSize: "28px",
-            fontFamily: "Arial",
-            color: "#ffffff",
-            stroke: "#000000",
-            strokeThickness: 4,
-          })
-          .setDepth(10);
-
         timerText = this.add
-          .text(20, 140, "TIME: 30", {
-            fontSize: "28px",
-            fontFamily: "Arial",
+          .text(centerX, 200, "5", {
+            fontSize: "214px",
+            fontFamily: "Impact",
             color: "#ffffff",
             stroke: "#000000",
             strokeThickness: 4,
+            align: "center",
           })
-          .setDepth(10);
+          .setOrigin(0.5)
+          .setDepth(10)
+          .setVisible(false);
 
         correctSound = this.sound.add("correct", { volume: 0.5 });
         wrongSound = this.sound.add("wrong", { volume: 0.5 });
+        tickSound = this.sound.add("tick", { volume: 0.7, loop: true });
+        backgroundMusic = this.sound.add("bgm", { volume: 0.1, loop: true });
+        backgroundMusic.play();
 
         this.cups = originalPositions.map((pos, index) =>
           this.add
@@ -199,12 +209,17 @@
           cup.on("pointerdown", () => checkCup(cup.getData("index"), this));
         });
 
-        this.time.addEvent({
+        timerUpdateEvent = this.time.addEvent({
           delay: 1000,
           callback: () => {
             if (timerEvent) {
-              const remaining = Math.ceil((timerEvent.delay - timerEvent.getElapsed()) / 1000);
-              timerText.setText("TIME: " + remaining);
+              const remaining = Math.floor((timerEvent.delay - timerEvent.getElapsed()) / 1000);
+              timerText.setText(remaining);
+              if (remaining > 0 && !tickSound.isPlaying) {
+                tickSound.play();
+              } else if (remaining <= 0 && tickSound.isPlaying) {
+                tickSound.stop();
+              }
             }
           },
           callbackScope: this,
@@ -264,16 +279,16 @@
               cup.setTexture("cup");
               cup.setData("index", index);
             });
+            timerText.setVisible(true);
             timerEvent = scene.time.addEvent({
-              delay: 30000,
+              delay: 5000,
               callback: () => {
-                lives--;
-                livesText.setText("LIVES: " + lives);
-                if (lives <= 0) {
-                  window.FarcadeSDK.singlePlayer.actions.gameOver({ score: userScore });
-                } else {
-                  showBallBeforeShuffle(scene);
-                }
+                scene.cups.forEach((cup) => cup.disableInteractive());
+                tickSound.stop();
+                wrongSound.play();
+                backgroundMusic.stop();
+                timerUpdateEvent.remove();
+                window.FarcadeSDK.singlePlayer.actions.gameOver({ score: userScore });
               },
               callbackScope: scene,
             });
@@ -323,7 +338,9 @@
         if (timerEvent) {
           timerEvent.remove();
           timerEvent = null;
-          timerText.setText("TIME: 30");
+          timerText.setText("5");
+          tickSound.stop();
+          timerText.setVisible(false);
         }
 
         const selectedCup = scene.cups[index];
@@ -349,9 +366,12 @@
               userScore += points;
               correctSound.play();
             } else {
-              lives--;
-              consecutiveCorrect = 0;
               wrongSound.play();
+              backgroundMusic.stop();
+              tickSound.stop();
+              timerUpdateEvent.remove();
+              window.FarcadeSDK.singlePlayer.actions.gameOver({ score: userScore });
+              return;
             }
 
             scene.tweens.add({
@@ -365,15 +385,12 @@
                 selectedCup.setTexture("cup");
                 levelText.setText("LEVEL: " + level);
                 scoreText.setText("SCORE: " + userScore);
-                livesText.setText("LIVES: " + lives);
 
                 if (selectedCup === correctCupObject && consecutiveCorrect >= 3) {
                   level++;
-                  lives = 3;
+                  lives = 1;
                   consecutiveCorrect = 0;
                   showBallBeforeShuffle(scene);
-                } else if (lives <= 0) {
-                  window.FarcadeSDK.singlePlayer.actions.gameOver({ score: userScore });
                 } else {
                   showBallBeforeShuffle(scene);
                 }
@@ -388,11 +405,36 @@
         if (timerEvent) {
           timerEvent.remove();
           timerEvent = null;
-          timerText.setText("TIME: 30");
+          timerText.setText("5");
+          tickSound.stop();
+          timerText.setVisible(false);
         }
+        if (timerUpdateEvent) {
+          timerUpdateEvent.remove();
+          timerUpdateEvent = null;
+        }
+        timerUpdateEvent = scene.time.addEvent({
+          delay: 1000,
+          callback: () => {
+            if (timerEvent) {
+              const remaining = Math.floor((timerEvent.delay - timerEvent.getElapsed()) / 1000);
+              timerText.setText(remaining);
+              if (remaining > 0 && !tickSound.isPlaying) {
+                tickSound.play();
+              } else if (remaining <= 0 && tickSound.isPlaying) {
+                tickSound.stop();
+              }
+            }
+          },
+          callbackScope: scene,
+          loop: true,
+        });
+        if (backgroundMusic.isPlaying) {
+          backgroundMusic.stop();
+        }
+        backgroundMusic.play();
         levelText.setText("LEVEL: " + level);
         scoreText.setText("SCORE: " + userScore);
-        livesText.setText("LIVES: " + lives);
         consecutiveCorrect = 0;
         showBallBeforeShuffle(scene);
       }
